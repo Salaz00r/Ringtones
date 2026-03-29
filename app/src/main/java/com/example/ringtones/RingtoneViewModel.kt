@@ -3,11 +3,13 @@ package com.example.ringtones
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +95,37 @@ class RingtoneViewModel(application: Application) : AndroidViewModel(application
             Toast.makeText(context, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+    //Metodo nuevo para compartir
+    fun share(context: Context, ringtone: Ringtone) {
+        try {
+            // Copiar el archivo a caché para poder compartirlo
+            val cacheFile = File(context.cacheDir, ringtone.assetFileName)
+            context.assets.open(ringtone.assetFileName).use { input ->
+                FileOutputStream(cacheFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            // Crear URI segura con FileProvider
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                cacheFile
+            )
+
+            // Lanzar el Intent de compartir
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/mpeg"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            context.startActivity(Intent.createChooser(intent, "Compartir ${ringtone.name} vía..."))
+        } catch (e: Exception) {
+            Toast.makeText(context, " Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 
     override fun onCleared() {
         super.onCleared()

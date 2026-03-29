@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -92,7 +93,8 @@ fun RingtoneGalleryApp(viewModel: RingtoneViewModel) {
                         ringtone = ringtone,
                         isPlaying = playingRingtone == ringtone.assetFileName,
                         onPlayPause = { viewModel.playOrPause(context, ringtone) },
-                        onDownload = { viewModel.download(context, ringtone) }
+                        onDownload = { viewModel.download(context, ringtone) },
+                        onShare = { viewModel.share(context, ringtone) }
                     )
                 }
             }
@@ -105,7 +107,8 @@ fun RingtoneCard(
     ringtone: Ringtone,
     isPlaying: Boolean,
     onPlayPause: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onShare: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -166,6 +169,22 @@ fun RingtoneCard(
                 Icon(
                     imageVector = Icons.Default.ArrowDownward,
                     contentDescription = "Descargar",
+                    tint = Color.White
+                )
+            }
+
+            IconButton(
+                onClick = onShare,
+                modifier = Modifier
+                    .background(
+                        color = Color(0xFF1565C0), // Azul
+                        shape = RoundedCornerShape(50)
+                    )
+                    .size(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Compartir",
                     tint = Color.White
                 )
             }
