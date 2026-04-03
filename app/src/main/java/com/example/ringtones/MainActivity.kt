@@ -1,6 +1,8 @@
 package com.example.ringtones
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Colores del Buen Fin
 val BuenFinRed = Color(0xFFCC0000)
 val BuenFinYellow = Color(0xFFFFD700)
 val BuenFinDark = Color(0xFF1A1A2E)
@@ -48,8 +49,28 @@ class MainActivity : ComponentActivity() {
             requestPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        createNotificationChannel()
+
         setContent {
             RingtoneGalleryApp(viewModel)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "ringtone_channel",
+                "Ringtone Points",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notificaciones de puntos por compartir ringtones"
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
         }
     }
 }
@@ -57,45 +78,67 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RingtoneGalleryApp(viewModel: RingtoneViewModel) {
     val playingRingtone by viewModel.playingRingtone.collectAsState()
+    val points by viewModel.pointsFlow.collectAsState()
+    val lastShared by viewModel.lastShared.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(BuenFinDark, CardBg))
+    LaunchedEffect(lastShared) {
+        if (lastShared != null) {
+            snackbarHostState.showSnackbar(
+                message = "¡+1 punto! Compartiste \"$lastShared\" — Total: $points puntos",
+                duration = SnackbarDuration.Short
             )
-    ) {
-        Column(
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(paddingValues)
+                .background(
+                    Brush.verticalGradient(listOf(BuenFinDark, CardBg))
+                )
         ) {
-            // Header
-            Text(
-                text = "🛍️ El Buen Fin",
-                color = BuenFinYellow,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Text(
-                text = "Galería de Ringtones",
-                color = Color.White,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(bottom = 20.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "🛍️ El Buen Fin",
+                    color = BuenFinYellow,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "Galería de Ringtones",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "⭐ Puntos: $points",
+                    color = BuenFinYellow,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-            // Lista de ringtones
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(viewModel.ringtones) { ringtone ->
-                    RingtoneCard(
-                        ringtone = ringtone,
-                        isPlaying = playingRingtone == ringtone.assetFileName,
-                        onPlayPause = { viewModel.playOrPause(context, ringtone) },
-                        onDownload = { viewModel.download(context, ringtone) },
-                        onShare = { viewModel.share(context, ringtone) }
-                    )
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(viewModel.ringtones) { ringtone ->
+                        RingtoneCard(
+                            ringtone = ringtone,
+                            isPlaying = playingRingtone == ringtone.assetFileName,
+                            onPlayPause = { viewModel.playOrPause(context, ringtone) },
+                            onDownload = { viewModel.download(context, ringtone) },
+                            onShare = { viewModel.share(context, ringtone) }
+                        )
+                    }
                 }
             }
         }
@@ -123,7 +166,6 @@ fun RingtoneCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Nombre del ringtone
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "🎵 ${ringtone.name}",
@@ -137,7 +179,6 @@ fun RingtoneCard(
                     fontSize = 12.sp
                 )
             }
-
 
             IconButton(
                 onClick = onPlayPause,
@@ -173,11 +214,13 @@ fun RingtoneCard(
                 )
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             IconButton(
                 onClick = onShare,
                 modifier = Modifier
                     .background(
-                        color = Color(0xFF1565C0), // Azul
+                        color = Color(0xFF1565C0),
                         shape = RoundedCornerShape(50)
                     )
                     .size(44.dp)

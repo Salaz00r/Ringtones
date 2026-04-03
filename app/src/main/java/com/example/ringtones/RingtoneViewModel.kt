@@ -1,14 +1,19 @@
 package com.example.ringtones
 
+import android.Manifest
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,9 +29,16 @@ data class Ringtone(
 class RingtoneViewModel(application: Application) : AndroidViewModel(application) {
 
     private var mediaPlayer: MediaPlayer? = null
+    private var points = 0
 
     private val _playingRingtone = MutableStateFlow<String?>(null)
     val playingRingtone: StateFlow<String?> = _playingRingtone
+
+    private val _points = MutableStateFlow(0)
+    val pointsFlow: StateFlow<Int> = _points
+
+    private val _lastShared = MutableStateFlow<String?>(null)
+    val lastShared: StateFlow<String?> = _lastShared
 
     val ringtones = listOf(
         Ringtone("Dragon Ball", "dragon-ball.mp3"),
@@ -64,7 +76,6 @@ class RingtoneViewModel(application: Application) : AndroidViewModel(application
     fun download(context: Context, ringtone: Ringtone) {
         try {
             val inputStream = context.assets.open(ringtone.assetFileName)
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.Audio.Media.DISPLAY_NAME, ringtone.assetFileName)
@@ -89,16 +100,14 @@ class RingtoneViewModel(application: Application) : AndroidViewModel(application
                     inputStream.copyTo(output)
                 }
             }
-
             Toast.makeText(context, "${ringtone.name} guardado en Música", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-    //Metodo nuevo para compartir
+
     fun share(context: Context, ringtone: Ringtone) {
         try {
-            // Copiar el archivo a caché para poder compartirlo
             val cacheFile = File(context.cacheDir, ringtone.assetFileName)
             context.assets.open(ringtone.assetFileName).use { input ->
                 FileOutputStream(cacheFile).use { output ->
@@ -106,26 +115,50 @@ class RingtoneViewModel(application: Application) : AndroidViewModel(application
                 }
             }
 
-            // Crear URI segura con FileProvider
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.provider",
                 cacheFile
             )
 
-            // Lanzar el Intent de compartir
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "audio/mpeg"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
+            points++
+            _points.value = points
+            _lastShared.value = ringtone.name
+            showPointsNotification(context, ringtone.name)
+
             context.startActivity(Intent.createChooser(intent, "Compartir ${ringtone.name} vía..."))
         } catch (e: Exception) {
-            Toast.makeText(context, " Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
+    private fun showPointsNotification(context: Context, ringtoneName: String) {
+        val notification = NotificationCompat.Builder(context, "ringtone_channel")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("¡Ganaste un punto!")
+            .setContentText("Compartiste \"$ringtoneName\" — Total: $points ${if (points == 1) "punto" else "puntos"}")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                NotificationManagerCompat.from(context).notify(points, notification)
+            }
+        } else {
+            NotificationManagerCompat.from(context).notify(points, notification)
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()
